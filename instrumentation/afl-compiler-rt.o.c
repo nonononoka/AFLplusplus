@@ -32,6 +32,7 @@ __attribute__((weak)) void __sanitizer_symbolize_pc(void *, const char *fmt,
 #endif
 #include "config.h"
 #include "types.h"
+#include "afl-rt.h"
 #include "cmplog.h"
 #include "llvm-alternative-coverage.h"
 
@@ -204,7 +205,7 @@ static u8 is_persistent;
 /* Are we in sancov mode? */
 
 static u8 _is_sancov;
-
+__thread u32 __afl_state;
 /* Debug? */
 
 /*static*/ u32 __afl_debug;
@@ -239,6 +240,34 @@ static void at_exit(int signal) {
 }
 
 #define default_hash(a, b) XXH3_64bits(a, b)
+
+// ijon関連
+void ijon_map_set(uint32_t addr){ 
+  __afl_area_ptr[(__afl_state^addr)%MAP_SIZE]|=1;
+}
+
+uint64_t ijon_simple_hash(uint64_t x) {
+    x = (x ^ (x >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+    x = (x ^ (x >> 27)) * UINT64_C(0x94d049bb133111eb);
+    x = x ^ (x >> 31);
+    return x;
+}
+
+uint32_t ijon_hashint(uint32_t old, uint32_t val){
+  uint64_t input = (((uint64_t)(old))<<32) | ((uint64_t)(val));
+  return (uint32_t)(ijon_simple_hash(input));
+}
+uint32_t ijon_hashstr(uint32_t old, char* val){
+  return ijon_hashmem(old, val, strlen(val));
+}
+uint32_t ijon_hashmem(uint32_t old, char* val, size_t len){
+  old = ijon_hashint(old,len);
+  for(size_t i = 0; i < len ; i++){
+    old = ijon_hashint(old, val[i]);
+  }
+  return old;
+}
+
 
 /* Uninspired gcc plugin instrumentation */
 
@@ -356,7 +385,6 @@ static void __afl_map_shm(void) {
   char *id_str = getenv(SHM_ENV_VAR);
 
   if (__afl_final_loc) {
-
     __afl_map_size = __afl_final_loc + 1;  // as we count starting 0
 
     if (getenv("AFL_DUMP_MAP_SIZE")) {

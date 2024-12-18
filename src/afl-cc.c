@@ -3118,6 +3118,7 @@ static void maybe_usage(aflcc_state_t *aflcc, int argc, char **argv) {
 */
 static void process_params(aflcc_state_t *aflcc, u8 scan, u32 argc,
                            char **argv) {
+  insert_param(aflcc, "-include ../instrumentation/afl-rt.h");
 
   // for (u32 x = 0; x < argc; ++x) fprintf(stderr, "[%u] %s\n", x, argv[x]);
 
